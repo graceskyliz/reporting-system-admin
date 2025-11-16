@@ -1,37 +1,100 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Edit2, Save, X } from 'lucide-react'
+import { ArrowLeft, Edit2, Save, X, Loader2 } from 'lucide-react'
+import { getIncident, updateIncidentStatus, addComment, getIncidentEvents, Incident } from '@/lib/api'
+import { getAuth } from '@/lib/auth-context'
 
 export default function IncidentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const incidentId = params.id as string
+  
+  const [incident, setIncident] = useState<Incident | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
-  const [status, setStatus] = useState('in_progress')
-  const [priority, setPriority] = useState('high')
-  const [assignee, setAssignee] = useState('Técnico A')
+  const [status, setStatus] = useState('pending')
+  const [priority, setPriority] = useState('medium')
+  const [assignee, setAssignee] = useState('')
+  const [events, setEvents] = useState<any[]>([])
 
-  const incident = {
-    id: incidentId,
-    title: 'Fuga de agua en el baño',
-    description: 'Se detectó una gotera en el techo del baño del segundo piso del edificio A. El agua gotea constantemente y ha mojado el piso, representando un riesgo.',
-    location: 'Edif. A - Piso 2',
-    priority: 'high',
-    status: 'in_progress',
-    createdAt: '2024-11-16 09:30',
-    updatedAt: '2024-11-16 10:45',
-    reporter: 'Juan Pérez',
-    type: 'Infraestructura',
+  useEffect(() => {
+    const fetchIncidentData = async () => {
+      try {
+        setLoading(true)
+        const auth = getAuth()
+        if (!auth) {
+          setError('No autenticado')
+          return
+        }
+
+        const incidentData = await getIncident(auth.token, incidentId)
+        setIncident(incidentData)
+        setStatus(incidentData.status)
+        setPriority(incidentData.priority)
+        setAssignee(incidentData.assignedTo || '')
+
+        const eventsData = await getIncidentEvents(auth.token, incidentId)
+        setEvents(eventsData)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error al cargar incidente')
+        console.error('[v0] Error fetching incident:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchIncidentData()
+  }, [incidentId])
+
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+      const auth = getAuth()
+      if (!auth) return
+
+      const updated = await updateIncidentStatus(auth.token, incidentId, status)
+      setIncident(updated)
+      setIsEditing(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al guardar')
+      console.error('[v0] Error saving incident:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleSave = () => {
-    console.log('Guardando cambios:', { status, priority, assignee })
-    setIsEditing(false)
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
+
+  if (!incident) {
+    return (
+      <div className="p-6">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors mb-4"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Volver
+        </button>
+        <Card className="border-2">
+          <CardContent className="p-8 text-center">
+            <p className="text-muted-foreground">{error || 'Incidente no encontrado'}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -45,6 +108,12 @@ export default function IncidentDetailPage() {
         Volver
       </button>
 
+      {error && (
+        <div className="p-4 bg-destructive/10 text-destructive rounded-lg">
+          {error}
+        </div>
+      )}
+
       {/* Main Card */}
       <Card className="border-2">
         <CardHeader>
@@ -54,11 +123,10 @@ export default function IncidentDetailPage() {
                 <span className="font-mono text-sm font-bold bg-primary/10 text-primary px-3 py-1 rounded">
                   {incident.id}
                 </span>
-                <Badge variant="secondary">{incident.type}</Badge>
               </div>
               <CardTitle>{incident.title}</CardTitle>
               <CardDescription className="mt-2">
-                Reportado por {incident.reporter} • {incident.createdAt}
+                Reportado por {incident.reportedBy} • {new Date(incident.createdAt).toLocaleString()}
               </CardDescription>
             </div>
             {!isEditing && (
@@ -92,10 +160,6 @@ export default function IncidentDetailPage() {
               <label className="text-sm font-semibold text-muted-foreground">Ubicación</label>
               <p className="text-foreground mt-1">📍 {incident.location}</p>
             </div>
-            <div>
-              <label className="text-sm font-semibold text-muted-foreground">Tipo de Incidente</label>
-              <p className="text-foreground mt-1">{incident.type}</p>
-            </div>
           </CardContent>
         </Card>
 
@@ -123,43 +187,27 @@ export default function IncidentDetailPage() {
                     <option value="resolved">Resuelto</option>
                   </select>
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-muted-foreground block mb-2">
-                    Prioridad
-                  </label>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-input rounded-lg bg-background text-foreground"
-                  >
-                    <option value="low">Baja</option>
-                    <option value="medium">Media</option>
-                    <option value="high">Alta</option>
-                    <option value="critical">Crítica</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-muted-foreground block mb-2">
-                    Asignado a
-                  </label>
-                  <input
-                    type="text"
-                    value={assignee}
-                    onChange={(e) => setAssignee(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-input rounded-lg bg-background text-foreground"
-                    placeholder="Nombre del responsable"
-                  />
-                </div>
                 <div className="flex gap-2 pt-4 border-t-2 border-border">
                   <Button
                     onClick={handleSave}
+                    disabled={saving}
                     className="gap-2 flex-1"
                   >
-                    <Save className="w-4 h-4" />
-                    Guardar Cambios
+                    {saving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Guardar Cambios
+                      </>
+                    )}
                   </Button>
                   <Button
                     onClick={() => setIsEditing(false)}
+                    disabled={saving}
                     variant="outline"
                     className="gap-2 flex-1"
                   >
@@ -191,7 +239,7 @@ export default function IncidentDetailPage() {
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-muted-foreground">Asignado a</label>
-                  <p className="text-foreground mt-1">👤 {assignee}</p>
+                  <p className="text-foreground mt-1">👤 {assignee || 'Sin asignar'}</p>
                 </div>
               </>
             )}
@@ -206,20 +254,21 @@ export default function IncidentDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="flex gap-4">
-              <div className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
-              <div>
-                <p className="font-semibold text-foreground">Estado cambió a "En Atención"</p>
-                <p className="text-sm text-muted-foreground">10:45 - Actualizado por Sistema</p>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <div className="w-2 h-2 rounded-full bg-secondary mt-1.5 flex-shrink-0"></div>
-              <div>
-                <p className="font-semibold text-foreground">Incidente creado</p>
-                <p className="text-sm text-muted-foreground">09:30 - Reportado por Juan Pérez</p>
-              </div>
-            </div>
+            {events.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No hay eventos registrados</p>
+            ) : (
+              events.map((event, idx) => (
+                <div key={idx} className="flex gap-4">
+                  <div className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                  <div>
+                    <p className="font-semibold text-foreground">{event.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(event.timestamp).toLocaleString()} - {event.actor}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

@@ -5,83 +5,52 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Search, Filter, Plus } from 'lucide-react'
+import { Search, Filter, Plus, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-
-interface Incident {
-  id: string
-  title: string
-  location: string
-  priority: 'low' | 'medium' | 'high' | 'critical'
-  status: 'pending' | 'in_progress' | 'resolved'
-  createdAt: string
-  updatedAt: string
-  reporter: string
-}
+import { listIncidents, Incident } from '@/lib/api'
+import { getAuth } from '@/lib/auth-context'
 
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<string>('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    // Simulación de datos completos
-    const allIncidents: Incident[] = [
-      {
-        id: 'INC-001',
-        title: 'Fuga de agua en el baño',
-        location: 'Edif. A - Piso 2',
-        priority: 'high',
-        status: 'in_progress',
-        createdAt: '2024-11-16 09:30',
-        updatedAt: '2024-11-16 10:45',
-        reporter: 'Juan Pérez',
-      },
-      {
-        id: 'INC-002',
-        title: 'Luz no funciona',
-        location: 'Entrada principal',
-        priority: 'medium',
-        status: 'pending',
-        createdAt: '2024-11-16 10:15',
-        updatedAt: '2024-11-16 10:15',
-        reporter: 'María García',
-      },
-      {
-        id: 'INC-003',
-        title: 'Ventana rota',
-        location: 'Lab 301',
-        priority: 'critical',
-        status: 'pending',
-        createdAt: '2024-11-16 11:00',
-        updatedAt: '2024-11-16 11:00',
-        reporter: 'Carlos López',
-      },
-      {
-        id: 'INC-004',
-        title: 'Puerta dañada',
-        location: 'Edif. B - Entrada',
-        priority: 'medium',
-        status: 'resolved',
-        createdAt: '2024-11-15 14:20',
-        updatedAt: '2024-11-16 08:00',
-        reporter: 'Ana Martínez',
-      },
-    ]
-    setIncidents(allIncidents)
-  }, [])
+    const fetchIncidents = async () => {
+      try {
+        setLoading(true)
+        const auth = getAuth()
+        if (!auth) {
+          setError('No autenticado')
+          return
+        }
+
+        const filters: any = {}
+        if (filterStatus !== 'all') filters.status = filterStatus
+        if (filterPriority !== 'all') filters.priority = filterPriority
+
+        const data = await listIncidents(auth.token, filters)
+        setIncidents(data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error al cargar incidentes')
+        console.error('[v0] Error fetching incidents:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchIncidents()
+  }, [filterStatus, filterPriority])
 
   const filteredIncidents = incidents.filter((incident) => {
     const matchesSearch =
       incident.title.toLowerCase().includes(search.toLowerCase()) ||
       incident.id.toLowerCase().includes(search.toLowerCase()) ||
       incident.location.toLowerCase().includes(search.toLowerCase())
-
-    const matchesStatus = filterStatus === 'all' || incident.status === filterStatus
-    const matchesPriority = filterPriority === 'all' || incident.priority === filterPriority
-
-    return matchesSearch && matchesStatus && matchesPriority
+    return matchesSearch
   })
 
   const getPriorityColor = (priority: string) => {
@@ -186,34 +155,47 @@ export default function IncidentsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {filteredIncidents.length === 0 ? (
+            {loading && (
+              <div className="text-center py-8">
+                <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-2" />
+                <p className="text-muted-foreground">Cargando incidentes...</p>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-4 bg-destructive/10 text-destructive rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {!loading && filteredIncidents.length === 0 && (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">No se encontraron incidentes</p>
               </div>
-            ) : (
-              filteredIncidents.map((incident) => (
-                <Link key={incident.id} href={`/dashboard/incidents/${incident.id}`}>
-                  <div className="p-4 border-2 border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <div className="font-mono text-sm font-bold text-primary min-w-20">{incident.id}</div>
-                      <div className="flex-1 min-w-40">
-                        <h3 className="font-semibold text-foreground">{incident.title}</h3>
-                        <p className="text-sm text-muted-foreground">📍 {incident.location}</p>
-                      </div>
-                      <Badge variant={getPriorityColor(incident.priority)} className="text-xs">
-                        {incident.priority.toUpperCase()}
-                      </Badge>
-                      <Badge variant={getStatusColor(incident.status)}>
-                        {getStatusLabel(incident.status)}
-                      </Badge>
-                      <div className="text-xs text-muted-foreground text-right">
-                        <p>{incident.updatedAt}</p>
-                      </div>
+            )}
+
+            {!loading && filteredIncidents.map((incident) => (
+              <Link key={incident.id} href={`/dashboard/incidents/${incident.id}`}>
+                <div className="p-4 border-2 border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="font-mono text-sm font-bold text-primary min-w-20">{incident.id}</div>
+                    <div className="flex-1 min-w-40">
+                      <h3 className="font-semibold text-foreground">{incident.title}</h3>
+                      <p className="text-sm text-muted-foreground">📍 {incident.location}</p>
+                    </div>
+                    <Badge variant={getPriorityColor(incident.priority)} className="text-xs">
+                      {incident.priority.toUpperCase()}
+                    </Badge>
+                    <Badge variant={getStatusColor(incident.status)}>
+                      {getStatusLabel(incident.status)}
+                    </Badge>
+                    <div className="text-xs text-muted-foreground text-right">
+                      <p>{new Date(incident.updatedAt).toLocaleString()}</p>
                     </div>
                   </div>
-                </Link>
-              ))
-            )}
+                </div>
+              </Link>
+            ))}
           </div>
         </CardContent>
       </Card>

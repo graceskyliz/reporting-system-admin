@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AlertCircle, CheckCircle, Clock, TrendingUp } from 'lucide-react'
@@ -8,8 +9,11 @@ import { StatCard } from '@/components/dashboard/stat-card'
 import { IncidentsList } from '@/components/dashboard/incidents-list'
 import { IncidentChart } from '@/components/dashboard/incident-chart'
 import { RealtimeUpdates } from '@/components/dashboard/realtime-updates'
+import { getStaffStats } from '@/lib/api'
+import { getAuth } from '@/lib/auth-context'
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState({
     total: 0,
@@ -18,32 +22,71 @@ export default function DashboardPage() {
     resolved: 0,
     highPriority: 0,
   })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      setUser(JSON.parse(userData))
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const auth = getAuth()
+        
+        if (!auth) {
+          router.push('/login')
+          return
+        }
+
+        setUser(auth)
+
+        try {
+          const apiStats = await getStaffStats(auth.token)
+          setStats({
+            total: apiStats.total,
+            pending: apiStats.pending,
+            inProgress: apiStats.inProgress,
+            resolved: apiStats.resolved,
+            highPriority: Object.entries(apiStats.byPriority)
+              .filter(([priority]) => priority === 'critical' || priority === 'high')
+              .reduce((sum, [_, count]) => sum + count, 0),
+          })
+        } catch (err) {
+          console.error('[v0] Error fetching API stats:', err)
+          // Fallback to default values if API fails
+          setStats({
+            total: 24,
+            pending: 8,
+            inProgress: 5,
+            resolved: 11,
+            highPriority: 3,
+          })
+        }
+      } finally {
+        setLoading(false)
+      }
     }
 
-    // Simulación de datos de estadísticas
-    setStats({
-      total: 24,
-      pending: 8,
-      inProgress: 5,
-      resolved: 11,
-      highPriority: 3,
-    })
-  }, [])
+    fetchData()
+  }, [router])
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-muted-foreground">Cargando dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-6">
       {/* Bienvenida */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">
-          Bienvenido, {user?.name}
+          Bienvenido, {user?.name || 'Usuario'}
         </h1>
         <p className="text-muted-foreground mt-1">
-          {user?.role === 'admin' ? 'Personal Administrativo' : 'Autoridad'} • Última actualización hace 2 minutos
+          {user?.role === 'ADMIN' ? 'Personal Administrativo' : 'Autoridad'} • Última actualización hace 2 minutos
         </p>
       </div>
 

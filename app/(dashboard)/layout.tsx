@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Menu, X, LogOut, Home, AlertCircle, BarChart3, Clock } from 'lucide-react'
+import { clearAuth, getAuth } from '@/lib/auth-context'
 
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Dashboard', key: 'dashboard' },
@@ -20,13 +21,26 @@ export default function DashboardLayout({
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const auth = getAuth()
+    if (!auth) {
+      router.push('/login')
+    }
+    setIsLoading(false)
+  }, [router])
 
   const handleLogout = () => {
-    localStorage.removeItem('user')
+    clearAuth()
     router.push('/login')
   }
 
   const currentPage = navItems.find(item => item.href === pathname)?.label || 'Dashboard'
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-screen" />
+  }
 
   return (
     <div className="flex h-screen bg-background">

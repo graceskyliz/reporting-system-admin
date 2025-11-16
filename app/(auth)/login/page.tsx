@@ -7,37 +7,50 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertCircle, LogIn } from 'lucide-react'
+import { login } from '@/lib/api'
+import { saveAuth } from '@/lib/auth-context'
+import { validateEmail, validatePassword } from '@/lib/validators'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('admin')
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [generalError, setGeneralError] = useState('')
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {}
+
+    const emailError = validateEmail(email)
+    if (emailError) newErrors.email = emailError.message
+
+    const passwordError = validatePassword(password)
+    if (passwordError) newErrors.password = passwordError.message
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+    
+    if (!validate()) return
+
+    setGeneralError('')
     setLoading(true)
 
-    // Simulación de autenticación - Reemplazar con API real
     try {
-      await new Promise(resolve => setTimeout(resolve, 800))
-      
-      if (email && password) {
-        localStorage.setItem('user', JSON.stringify({
-          email,
-          role,
-          name: email.split('@')[0],
-          id: Date.now()
-        }))
-        router.push('/dashboard')
-      } else {
-        setError('Por favor ingrese sus credenciales')
-      }
+      const response = await login(email, password)
+      saveAuth(response)
+      router.push('/dashboard')
     } catch (err) {
-      setError('Error al iniciar sesión')
+      setGeneralError(
+        err instanceof Error 
+          ? err.message 
+          : 'Error al iniciar sesión. Verifique sus credenciales.'
+      )
+      console.error('[v0] Login error:', err)
     } finally {
       setLoading(false)
     }
@@ -65,10 +78,16 @@ export default function LoginPage() {
               type="email"
               placeholder="usuario@institucion.edu"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (errors.email) setErrors({ ...errors, email: '' })
+              }}
               disabled={loading}
-              className="border-2"
+              className={`border-2 ${errors.email ? 'border-destructive' : ''}`}
             />
+            {errors.email && (
+              <p className="text-xs text-destructive">{errors.email}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -78,36 +97,28 @@ export default function LoginPage() {
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (errors.password) setErrors({ ...errors, password: '' })
+              }}
               disabled={loading}
-              className="border-2"
+              className={`border-2 ${errors.password ? 'border-destructive' : ''}`}
             />
+            {errors.password && (
+              <p className="text-xs text-destructive">{errors.password}</p>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="role">Rol</Label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              disabled={loading}
-              className="w-full px-3 py-2 border-2 border-input rounded-lg bg-background text-foreground disabled:opacity-50"
-            >
-              <option value="admin">Personal Administrativo</option>
-              <option value="authority">Autoridad</option>
-            </select>
-          </div>
-
-          {error && (
+          {generalError && (
             <div className="flex gap-2 p-3 bg-destructive/10 rounded-lg text-destructive">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <p className="text-sm">{error}</p>
+              <p className="text-sm">{generalError}</p>
             </div>
           )}
 
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || Object.keys(errors).length > 0}
             className="w-full"
           >
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
@@ -115,7 +126,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-xs text-muted-foreground text-center mt-4">
-          Credenciales de prueba: cualquier email y contraseña
+          Ingresa tus credenciales institucionales
         </p>
       </CardContent>
     </Card>
