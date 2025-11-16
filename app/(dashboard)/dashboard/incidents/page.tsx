@@ -1,16 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Search, Filter, Plus, Loader2 } from 'lucide-react'
+import { Search, Filter, Plus, Loader2, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { listIncidents, Incident } from '@/lib/api'
-import { getAuth } from '@/lib/auth-context'
+import { getAuth, clearAuth } from '@/lib/auth-context'
 
 export default function IncidentsPage() {
+  const router = useRouter()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -18,25 +20,42 @@ export default function IncidentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const handleLogout = () => {
+    clearAuth()
+    router.push('/login')
+  }
+
   useEffect(() => {
     const fetchIncidents = async () => {
       try {
         setLoading(true)
+        console.log('[Incidents Page] Fetching incidents')
         const auth = getAuth()
         if (!auth) {
+          console.log('[Incidents Page] No auth found')
           setError('No autenticado')
           return
         }
 
         const filters: any = {}
-        if (filterStatus !== 'all') filters.status = filterStatus
-        if (filterPriority !== 'all') filters.priority = filterPriority
+        if (filterStatus !== 'all') filters.estado = filterStatus
+        if (filterPriority !== 'all') filters.urgencia = filterPriority
 
+        console.log('[Incidents Page] Filters:', filters)
         const data = await listIncidents(auth.token, filters)
-        setIncidents(data)
+        console.log('[Incidents Page] Incidents received:', data)
+        
+        // Ensure data is an array
+        if (Array.isArray(data)) {
+          setIncidents(data)
+        } else {
+          console.error('[Incidents Page] Data is not an array:', data)
+          setIncidents([])
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al cargar incidentes')
-        console.error('[v0] Error fetching incidents:', err)
+        console.error('[Incidents Page] Error fetching incidents:', err)
+        setIncidents([])
       } finally {
         setLoading(false)
       }
@@ -45,48 +64,49 @@ export default function IncidentsPage() {
     fetchIncidents()
   }, [filterStatus, filterPriority])
 
-  const filteredIncidents = incidents.filter((incident) => {
+  const filteredIncidents = Array.isArray(incidents) ? incidents.filter((incident) => {
     const matchesSearch =
-      incident.title.toLowerCase().includes(search.toLowerCase()) ||
-      incident.id.toLowerCase().includes(search.toLowerCase()) ||
-      incident.location.toLowerCase().includes(search.toLowerCase())
+      incident.tipo?.toLowerCase().includes(search.toLowerCase()) ||
+      incident.incident_id?.toLowerCase().includes(search.toLowerCase()) ||
+      incident.ubicacion?.toLowerCase().includes(search.toLowerCase()) ||
+      incident.descripcion?.toLowerCase().includes(search.toLowerCase())
     return matchesSearch
-  })
+  }) : []
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'critical':
+  const getPriorityColor = (urgencia: string) => {
+    switch (urgencia) {
+      case 'critica':
         return 'destructive'
-      case 'high':
+      case 'alta':
         return 'secondary'
-      case 'medium':
+      case 'media':
         return 'accent'
       default:
         return 'outline'
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'resolved':
+  const getStatusColor = (estado: string) => {
+    switch (estado) {
+      case 'resuelto':
         return 'outline'
-      case 'in_progress':
+      case 'en_proceso':
         return 'default'
       default:
         return 'secondary'
     }
   }
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending':
+  const getStatusLabel = (estado: string) => {
+    switch (estado) {
+      case 'pendiente':
         return 'Pendiente'
-      case 'in_progress':
-        return 'En Atención'
-      case 'resolved':
+      case 'en_proceso':
+        return 'En Proceso'
+      case 'resuelto':
         return 'Resuelto'
       default:
-        return status
+        return estado
     }
   }
 
@@ -126,9 +146,9 @@ export default function IncidentsPage() {
               className="px-3 py-2 border-2 border-input rounded-lg bg-background text-foreground"
             >
               <option value="all">Todos los estados</option>
-              <option value="pending">Pendiente</option>
-              <option value="in_progress">En Atención</option>
-              <option value="resolved">Resuelto</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="en_proceso">En Proceso</option>
+              <option value="resuelto">Resuelto</option>
             </select>
 
             {/* Priority Filter */}
@@ -137,11 +157,11 @@ export default function IncidentsPage() {
               onChange={(e) => setFilterPriority(e.target.value)}
               className="px-3 py-2 border-2 border-input rounded-lg bg-background text-foreground"
             >
-              <option value="all">Todas las prioridades</option>
-              <option value="low">Baja</option>
-              <option value="medium">Media</option>
-              <option value="high">Alta</option>
-              <option value="critical">Crítica</option>
+              <option value="all">Todas las urgencias</option>
+              <option value="baja">Baja</option>
+              <option value="media">Media</option>
+              <option value="alta">Alta</option>
+              <option value="critica">Crítica</option>
             </select>
           </div>
         </CardContent>
@@ -164,7 +184,21 @@ export default function IncidentsPage() {
 
             {error && (
               <div className="p-4 bg-destructive/10 text-destructive rounded-lg">
-                {error}
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-semibold">Error al cargar incidentes</p>
+                    <p className="text-sm">{error}</p>
+                    {error.includes('Token inválido') && (
+                      <p className="text-xs mt-2">Tu sesión ha expirado. Por favor inicia sesión nuevamente.</p>
+                    )}
+                  </div>
+                  {error.includes('Token inválido') && (
+                    <Button onClick={handleLogout} variant="destructive" size="sm" className="gap-2">
+                      <LogOut className="w-4 h-4" />
+                      Ir a Login
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -175,22 +209,25 @@ export default function IncidentsPage() {
             )}
 
             {!loading && filteredIncidents.map((incident) => (
-              <Link key={incident.id} href={`/dashboard/incidents/${incident.id}`}>
+              <Link key={incident.incident_id} href={`/dashboard/incidents/${incident.incident_id}`}>
                 <div className="p-4 border-2 border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
                   <div className="flex items-center gap-4 flex-wrap">
-                    <div className="font-mono text-sm font-bold text-primary min-w-20">{incident.id}</div>
-                    <div className="flex-1 min-w-40">
-                      <h3 className="font-semibold text-foreground">{incident.title}</h3>
-                      <p className="text-sm text-muted-foreground">📍 {incident.location}</p>
+                    <div className="font-mono text-sm font-bold text-primary min-w-20">
+                      {incident.incident_id.substring(0, 8)}
                     </div>
-                    <Badge variant={getPriorityColor(incident.priority)} className="text-xs">
-                      {incident.priority.toUpperCase()}
+                    <div className="flex-1 min-w-40">
+                      <h3 className="font-semibold text-foreground">{incident.tipo}</h3>
+                      <p className="text-sm text-muted-foreground">📍 {incident.ubicacion}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{incident.descripcion?.substring(0, 80)}...</p>
+                    </div>
+                    <Badge variant={getPriorityColor(incident.urgencia)} className="text-xs">
+                      {incident.urgencia.toUpperCase()}
                     </Badge>
-                    <Badge variant={getStatusColor(incident.status)}>
-                      {getStatusLabel(incident.status)}
+                    <Badge variant={getStatusColor(incident.estado)}>
+                      {getStatusLabel(incident.estado)}
                     </Badge>
                     <div className="text-xs text-muted-foreground text-right">
-                      <p>{new Date(incident.updatedAt).toLocaleString()}</p>
+                      <p>{new Date(incident.updated_at).toLocaleString()}</p>
                     </div>
                   </div>
                 </div>

@@ -9,11 +9,10 @@ import { Label } from '@/components/ui/label'
 import { AlertCircle, LogIn } from 'lucide-react'
 import { login } from '@/lib/api'
 import { saveAuth } from '@/lib/auth-context'
-import { validateEmail, validatePassword } from '@/lib/validators'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
@@ -22,11 +21,13 @@ export default function LoginPage() {
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {}
 
-    const emailError = validateEmail(email)
-    if (emailError) newErrors.email = emailError.message
+    if (!username.trim()) {
+      newErrors.username = 'El nombre de usuario es requerido'
+    }
 
-    const passwordError = validatePassword(password)
-    if (passwordError) newErrors.password = passwordError.message
+    if (!password || password.length < 6) {
+      newErrors.password = 'La contraseña debe tener al menos 6 caracteres'
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -35,22 +36,33 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!validate()) return
+    console.log('[Login Page] Form submitted')
+    
+    if (!validate()) {
+      console.log('[Login Page] Validation failed')
+      return
+    }
 
     setGeneralError('')
     setLoading(true)
 
     try {
-      const response = await login(email, password)
+      console.log('[Login Page] Calling login API with username:', username)
+      const response = await login(username, password)
+      console.log('[Login Page] Login successful, saving auth')
       saveAuth(response)
+      console.log('[Login Page] Auth saved, redirecting to dashboard')
+      console.log('[Login Page] Current pathname:', window.location.pathname)
+      console.log('[Login Page] Calling router.push("/dashboard")')
       router.push('/dashboard')
+      console.log('[Login Page] router.push called successfully')
     } catch (err) {
+      console.error('[Login Page] Login error:', err)
       setGeneralError(
         err instanceof Error 
           ? err.message 
           : 'Error al iniciar sesión. Verifique sus credenciales.'
       )
-      console.error('[v0] Login error:', err)
     } finally {
       setLoading(false)
     }
@@ -72,21 +84,21 @@ export default function LoginPage() {
       <CardContent>
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Correo Institucional</Label>
+            <Label htmlFor="username">Usuario</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder="usuario@institucion.edu"
-              value={email}
+              id="username"
+              type="text"
+              placeholder="staff001"
+              value={username}
               onChange={(e) => {
-                setEmail(e.target.value)
-                if (errors.email) setErrors({ ...errors, email: '' })
+                setUsername(e.target.value)
+                if (errors.username) setErrors({ ...errors, username: '' })
               }}
               disabled={loading}
-              className={`border-2 ${errors.email ? 'border-destructive' : ''}`}
+              className={`border-2 ${errors.username ? 'border-destructive' : ''}`}
             />
-            {errors.email && (
-              <p className="text-xs text-destructive">{errors.email}</p>
+            {errors.username && (
+              <p className="text-xs text-destructive">{errors.username}</p>
             )}
           </div>
 
@@ -124,6 +136,19 @@ export default function LoginPage() {
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </Button>
         </form>
+
+        <div className="mt-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            ¿No tienes una cuenta?{' '}
+            <button
+              type="button"
+              onClick={() => router.push('/register')}
+              className="text-primary hover:underline font-medium"
+            >
+              Registrarse
+            </button>
+          </p>
+        </div>
 
         <p className="text-xs text-muted-foreground text-center mt-4">
           Ingresa tus credenciales institucionales

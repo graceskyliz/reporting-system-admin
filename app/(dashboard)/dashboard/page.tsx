@@ -25,42 +25,59 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    console.log('[Dashboard Page] Component mounted')
     const fetchData = async () => {
       try {
         setLoading(true)
+        console.log('[Dashboard Page] Fetching auth')
         const auth = getAuth()
+        console.log('[Dashboard Page] Auth retrieved:', auth)
         
         if (!auth) {
+          console.log('[Dashboard Page] No auth, redirecting to login')
           router.push('/login')
           return
         }
 
+        console.log('[Dashboard Page] Setting user state')
         setUser(auth)
 
         try {
+          console.log('[Dashboard Page] Fetching staff stats with token:', auth.token)
           const apiStats = await getStaffStats(auth.token)
+          console.log('[Dashboard Page] Stats received:', apiStats)
+          
+          const pending = apiStats.por_estado?.pendiente || 0
+          const inProgress = apiStats.por_estado?.en_proceso || 0
+          const resolved = apiStats.por_estado?.resuelto || 0
+          const total = pending + inProgress + resolved
+          
+          // Calculate high priority from department stats if needed
+          const highPriority = apiStats.por_departamento 
+            ? Object.values(apiStats.por_departamento).reduce((sum, count) => sum + count, 0)
+            : 0
+          
           setStats({
-            total: apiStats.total,
-            pending: apiStats.pending,
-            inProgress: apiStats.inProgress,
-            resolved: apiStats.resolved,
-            highPriority: Object.entries(apiStats.byPriority)
-              .filter(([priority]) => priority === 'critical' || priority === 'high')
-              .reduce((sum, [_, count]) => sum + count, 0),
+            total,
+            pending,
+            inProgress,
+            resolved,
+            highPriority,
           })
         } catch (err) {
-          console.error('[v0] Error fetching API stats:', err)
+          console.error('[Dashboard Page] Error fetching API stats:', err)
           // Fallback to default values if API fails
           setStats({
-            total: 24,
-            pending: 8,
-            inProgress: 5,
-            resolved: 11,
-            highPriority: 3,
+            total: 0,
+            pending: 0,
+            inProgress: 0,
+            resolved: 0,
+            highPriority: 0,
           })
         }
       } finally {
         setLoading(false)
+        console.log('[Dashboard Page] Loading complete')
       }
     }
 

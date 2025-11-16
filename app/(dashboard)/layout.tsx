@@ -24,12 +24,19 @@ export default function DashboardLayout({
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    console.log('[Dashboard Layout] useEffect triggered')
+    console.log('[Dashboard Layout] Current pathname:', pathname)
     const auth = getAuth()
+    console.log('[Dashboard Layout] Auth from localStorage:', auth)
     if (!auth) {
+      console.log('[Dashboard Layout] No auth found, redirecting to login')
       router.push('/login')
+    } else {
+      console.log('[Dashboard Layout] Auth found, user authenticated')
     }
     setIsLoading(false)
-  }, [router])
+    console.log('[Dashboard Layout] Loading set to false')
+  }, [router, pathname])
 
   const handleLogout = () => {
     clearAuth()

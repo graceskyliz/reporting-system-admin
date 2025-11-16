@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,8 +8,10 @@ import { AlertCircle, CheckCircle2, Clock, BarChart3, Bell, Lock } from 'lucide-
 
 export default function HomePage() {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     const user = localStorage.getItem('user')
     if (user) {
       router.push('/dashboard')
@@ -42,12 +44,9 @@ export default function HomePage() {
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
           Plataforma integral para reportar, gestionar y resolver incidentes institucionales con actualizaciones en tiempo real
         </p>
-        <div className="flex gap-4 justify-center flex-wrap">
+        <div className="flex justify-center flex-wrap">
           <Button size="lg" onClick={() => router.push('/login')}>
             Acceder al Sistema
-          </Button>
-          <Button size="lg" variant="outline">
-            Más Información
           </Button>
         </div>
       </section>
