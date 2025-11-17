@@ -39,8 +39,11 @@ export default function IncidentsPage() {
           return
         }
 
-        console.log('[Incidents Page] Fetching all incidents')
-        const data = await listIncidents(auth.token)
+        console.log('[Incidents Page] Fetching incidents with filters:', { filterStatus, filterPriority })
+        const data = await listIncidents(auth.token, {
+          estado: filterStatus !== 'all' ? filterStatus : undefined,
+          urgencia: filterPriority !== 'all' ? filterPriority : undefined
+        })
         console.log('[Incidents Page] Incidents received:', data)
         
         // Ensure data is an array
@@ -60,10 +63,10 @@ export default function IncidentsPage() {
     }
 
     fetchIncidents()
-  }, []) // Solo fetch una vez al montar
+  }, [filterStatus, filterPriority]) // Re-fetch cuando cambien los filtros
 
   const filteredIncidents = Array.isArray(incidents) ? incidents.filter((incident) => {
-    // Filtrado por búsqueda
+    // Filtrado por búsqueda (solo frontend, el resto viene filtrado del backend)
     const ubicacionStr = formatUbicacion(incident.ubicacion).toLowerCase()
     const matchesSearch =
       incident.tipo?.toLowerCase().includes(search.toLowerCase()) ||
@@ -71,13 +74,7 @@ export default function IncidentsPage() {
       ubicacionStr.includes(search.toLowerCase()) ||
       incident.descripcion?.toLowerCase().includes(search.toLowerCase())
     
-    // Filtrado por estado (frontend)
-    const matchesStatus = filterStatus === 'all' || incident.estado === filterStatus
-    
-    // Filtrado por urgencia (frontend)
-    const matchesPriority = filterPriority === 'all' || incident.urgencia === filterPriority
-    
-    return matchesSearch && matchesStatus && matchesPriority
+    return matchesSearch
   }) : []
 
   const getPriorityColor = (urgencia: string) => {

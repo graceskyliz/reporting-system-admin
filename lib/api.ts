@@ -60,12 +60,20 @@ export interface Attachment {
 }
 
 export interface StatsResponse {
-  por_estado: {
+  por_estado?: {
     pendiente?: number
     en_proceso?: number
     resuelto?: number
   }
-  por_departamento: Record<string, number>
+  por_departamento?: Record<string, number>
+  por_urgencia?: Record<string, number>
+  // Computed properties for easier access
+  total?: number
+  pending?: number
+  inProgress?: number
+  resolved?: number
+  byPriority?: Record<string, number>
+  byDepartment?: Record<string, number>
 }
 
 // Auth Services
@@ -126,11 +134,32 @@ export async function login(user_id: string, password: string): Promise<AuthResp
 }
 
 // Incident Services (Staff endpoints - admin access to all incidents)
-export async function listIncidents(token: string) {
-  console.log('[API] List all incidents (GET):', { endpoint: `${API_BASE_URL}/student/incidents` })
+export interface IncidentFilters {
+  estado?: string
+  urgencia?: string
+  departamento?: string
+}
+
+export async function listIncidents(token: string, filters?: IncidentFilters) {
+  // Build query params if filters are provided
+  const queryParams = new URLSearchParams()
+  if (filters?.estado && filters.estado !== 'all') {
+    queryParams.append('estado', filters.estado)
+  }
+  if (filters?.urgencia && filters.urgencia !== 'all') {
+    queryParams.append('urgencia', filters.urgencia)
+  }
+  if (filters?.departamento && filters.departamento !== 'all') {
+    queryParams.append('departamento', filters.departamento)
+  }
+  
+  const queryString = queryParams.toString()
+  const endpoint = `${API_BASE_URL}/student/incidents${queryString ? `?${queryString}` : ''}`
+  
+  console.log('[API] List incidents (GET):', { endpoint, filters })
   console.log('[API] Token being sent:', token)
   
-  const response = await fetch(`${API_BASE_URL}/student/incidents`, {
+  const response = await fetch(endpoint, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`
@@ -386,7 +415,28 @@ export async function getStaffStats(token: string) {
     throw new Error('Failed to fetch stats')
   }
   
-  const data = await response.json() as ApiResponse<StatsResponse>
-  console.log('[API] Get stats successful:', data.body)
-  return data.body
+  const rawData = await response.text()
+  const data = JSON.parse(rawData) as ApiResponse<StatsResponse>
+  console.log('[API] Parsed stats response:', data)
+  
+  // Transform backend format to frontend format with safe defaults
+  const stats = data.body || {}
+  const pending = stats.por_estado?.pendiente || 0
+  const inProgress = stats.por_estado?.en_proceso || 0
+  const resolved = stats.por_estado?.resuelto || 0
+  
+  const result = {
+    por_estado: stats.por_estado,
+    por_departamento: stats.por_departamento || {},
+    por_urgencia: stats.por_urgencia || {},
+    total: pending + inProgress + resolved,
+    pending,
+    inProgress,
+    resolved,
+    byPriority: stats.por_urgencia || {},
+    byDepartment: stats.por_departamento || {}
+  }
+  
+  console.log('[API] Transformed stats result:', result)
+  return result
 }

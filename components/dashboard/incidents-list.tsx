@@ -6,64 +6,40 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-
-interface Incident {
-  id: string
-  title: string
-  description: string
-  location: string
-  priority: 'low' | 'medium' | 'high' | 'critical'
-  status: 'pending' | 'in_progress' | 'resolved'
-  createdAt: string
-  reporter: string
-}
+import { listIncidents, Incident } from '@/lib/api'
+import { getAuth } from '@/lib/auth-context'
+import { formatUbicacion } from '@/lib/utils'
 
 export function IncidentsList() {
   const [incidents, setIncidents] = useState<Incident[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Simulación de datos
-    setIncidents([
-      {
-        id: 'INC-001',
-        title: 'Fuga de agua en el baño',
-        description: 'Gotera en el techo del baño del segundo piso',
-        location: 'Edif. A - Piso 2',
-        priority: 'high',
-        status: 'in_progress',
-        createdAt: '2024-11-16 09:30',
-        reporter: 'Juan Pérez',
-      },
-      {
-        id: 'INC-002',
-        title: 'Luz no funciona',
-        description: 'Alumbrado exterior no enciende por las noches',
-        location: 'Entrada principal',
-        priority: 'medium',
-        status: 'pending',
-        createdAt: '2024-11-16 10:15',
-        reporter: 'María García',
-      },
-      {
-        id: 'INC-003',
-        title: 'Ventana rota',
-        description: 'Cristal roto en el laboratorio 301',
-        location: 'Lab 301',
-        priority: 'critical',
-        status: 'pending',
-        createdAt: '2024-11-16 11:00',
-        reporter: 'Carlos López',
-      },
-    ])
+    const fetchIncidents = async () => {
+      try {
+        const auth = getAuth()
+        if (!auth) return
+        
+        const data = await listIncidents(auth.token)
+        // Show only the 5 most recent incidents
+        setIncidents(data.slice(0, 5))
+      } catch (error) {
+        console.error('Error fetching incidents:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchIncidents()
   }, [])
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical':
+      case 'critica':
         return 'destructive'
-      case 'high':
+      case 'alta':
         return 'secondary'
-      case 'medium':
+      case 'media':
         return 'accent'
       default:
         return 'outline'
@@ -72,9 +48,9 @@ export function IncidentsList() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'resolved':
+      case 'resuelto':
         return 'outline'
-      case 'in_progress':
+      case 'en_proceso':
         return 'default'
       default:
         return 'secondary'
@@ -83,15 +59,31 @@ export function IncidentsList() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'pending':
+      case 'pendiente':
         return 'Pendiente'
-      case 'in_progress':
+      case 'en_proceso':
         return 'En Atención'
-      case 'resolved':
+      case 'resuelto':
         return 'Resuelto'
       default:
         return status
     }
+  }
+
+  if (loading) {
+    return (
+      <Card className="border-2">
+        <CardHeader>
+          <CardTitle>Incidentes Recientes</CardTitle>
+          <CardDescription>Últimos reportes registrados</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -110,37 +102,41 @@ export function IncidentsList() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {incidents.map((incident) => (
-            <Link key={incident.id} href={`/dashboard/incidents/${incident.id}`}>
-              <div className="p-4 border-2 border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-foreground">{incident.title}</h3>
-                      <Badge variant={getPriorityColor(incident.priority)} className="text-xs">
-                        {incident.priority.toUpperCase()}
+        {incidents.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No hay incidentes recientes</p>
+        ) : (
+          <div className="space-y-3">
+            {incidents.map((incident) => (
+              <Link key={incident.incident_id} href={`/dashboard/incidents/${incident.incident_id}`}>
+                <div className="p-4 border-2 border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground">{incident.tipo}</h3>
+                        <Badge variant={getPriorityColor(incident.urgencia)} className="text-xs">
+                          {incident.urgencia.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">{incident.descripcion?.substring(0, 80)}...</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>📍 {formatUbicacion(incident.ubicacion)}</span>
+                        <span>🕐 {new Date(incident.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getStatusColor(incident.estado)}>
+                        {getStatusLabel(incident.estado)}
                       </Badge>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">{incident.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>📍 {incident.location}</span>
-                      <span>🕐 {incident.createdAt}</span>
-                      <span>👤 {incident.reporter}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={getStatusColor(incident.status)}>
-                      {getStatusLabel(incident.status)}
-                    </Badge>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </div>
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
+

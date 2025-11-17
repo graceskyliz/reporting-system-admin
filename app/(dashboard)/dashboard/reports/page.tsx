@@ -57,24 +57,30 @@ export default function ReportsPage() {
     )
   }
 
-  // Transform data for charts
+  // Transform data for charts with defensive checks
   const statusData = [
-    { name: 'Resueltos', value: stats.resolved, fill: 'hsl(var(--color-primary))' },
-    { name: 'En Atención', value: stats.inProgress, fill: 'hsl(var(--color-accent))' },
-    { name: 'Pendientes', value: stats.pending, fill: 'hsl(var(--color-secondary))' },
+    { name: 'Resueltos', value: stats?.resolved || 0, fill: 'hsl(var(--color-primary))' },
+    { name: 'En Atención', value: stats?.inProgress || 0, fill: 'hsl(var(--color-accent))' },
+    { name: 'Pendientes', value: stats?.pending || 0, fill: 'hsl(var(--color-secondary))' },
   ]
 
-  const priorityData = Object.entries(stats.byPriority).map(([name, count]) => ({
-    name: name.charAt(0).toUpperCase() + name.slice(1),
-    count,
-  }))
+  const priorityData = (stats?.byPriority && typeof stats.byPriority === 'object')
+    ? Object.entries(stats.byPriority).map(([name, count]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        count: count || 0,
+      }))
+    : []
 
-  const locationData = Object.entries(stats.byDepartment).map(([location, count]) => ({
-    location,
-    count,
-  }))
+  const locationData = (stats?.byDepartment && typeof stats.byDepartment === 'object')
+    ? Object.entries(stats.byDepartment).map(([location, count]) => ({
+        location,
+        count: count || 0,
+      }))
+    : []
 
-  const resolutionRate = stats.total > 0 ? Math.round((stats.resolved / stats.total) * 100) : 0
+  const total = stats?.total || 0
+  const resolved = stats?.resolved || 0
+  const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0
   const avgResolutionTime = '2.5 días'
 
   return (
@@ -97,7 +103,7 @@ export default function ReportsPage() {
           <CardContent className="p-6">
             <div>
               <p className="text-sm text-muted-foreground">Total de Reportes</p>
-              <h3 className="text-3xl font-bold text-foreground mt-2">{stats.total}</h3>
+              <h3 className="text-3xl font-bold text-foreground mt-2">{total}</h3>
               <p className="text-xs text-primary mt-2 flex items-center gap-1">
                 <TrendingUp className="w-4 h-4" />
                 +12% este mes
