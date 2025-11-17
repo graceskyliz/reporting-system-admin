@@ -126,21 +126,15 @@ export async function login(user_id: string, password: string): Promise<AuthResp
 }
 
 // Incident Services (Staff endpoints - admin access to all incidents)
-export async function listIncidents(token: string, filters?: { estado?: string; urgencia?: string; ubicacion?: string; department?: string }) {
-  console.log('[API] List incidents by department:', { filters, endpoint: `${API_BASE_URL}/staff/incidents/by-department` })
+export async function listIncidents(token: string) {
+  console.log('[API] List all incidents (GET):', { endpoint: `${API_BASE_URL}/student/incidents` })
   console.log('[API] Token being sent:', token)
   
-  const params = new URLSearchParams()
-  if (filters?.estado) params.append('estado', filters.estado)
-  if (filters?.urgencia) params.append('urgencia', filters.urgencia)
-  if (filters?.ubicacion) params.append('ubicacion', filters.ubicacion)
-  if (filters?.department) params.append('department', filters.department)
-  
-  const url = `${API_BASE_URL}/staff/incidents/by-department${params.toString() ? '?' + params.toString() : ''}`
-  console.log('[API] Full URL:', url)
-  
-  const response = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` }
+  const response = await fetch(`${API_BASE_URL}/student/incidents`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
   })
   
   console.log('[API] List incidents response status:', response.status)
@@ -154,7 +148,7 @@ export async function listIncidents(token: string, filters?: { estado?: string; 
   const rawData = await response.text()
   console.log('[API] Raw response:', rawData)
   
-  const data = JSON.parse(rawData) as ApiResponse<Incident[]>
+  const data = JSON.parse(rawData) as ApiResponse<{ data: Incident[] }>
   console.log('[API] Parsed response:', data)
   
   // Check if response contains an error
@@ -163,85 +157,179 @@ export async function listIncidents(token: string, filters?: { estado?: string; 
     throw new Error((data.body as any).error || 'Backend error')
   }
   
-  console.log('[API] List incidents successful, count:', data.body?.length || 0)
-  console.log('[API] First incident:', data.body?.[0])
-  return data.body
+  // Extract incidents from body.data
+  const incidents = data.body?.data || []
+  console.log('[API] List incidents successful, count:', incidents.length)
+  console.log('[API] First incident:', incidents[0])
+  return incidents
 }
 
 export async function getIncident(token: string, id: string) {
-  console.log('[API] Get incident:', { id, endpoint: `${API_BASE_URL}/student/incidents/${id}` })
+  console.log('[API] Get incident - using workaround (list all + filter):', { id })
   
-  const response = await fetch(`${API_BASE_URL}/student/incidents/${id}`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  })
-  
-  console.log('[API] Get incident response status:', response.status)
-  
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('[API] Get incident failed:', errorText)
-    throw new Error('Failed to fetch incident')
+  // WORKAROUND: Since GET /student/incidents/{id} has CORS issues,
+  // we'll use the working GET /student/incidents endpoint and filter client-side
+  try {
+    const allIncidents = await listIncidents(token)
+    const incident = allIncidents.find(inc => inc.incident_id === id)
+    
+    if (!incident) {
+      console.error('[API] Incident not found in list:', id)
+      throw new Error('Incident not found')
+    }
+    
+    console.log('[API] Get incident successful (via list):', incident)
+    return incident
+  } catch (error) {
+    console.error('[API] Workaround failed, falling back to direct call:', error)
+    
+    // Fallback to direct call if list fails
+    const response = await fetch(`${API_BASE_URL}/student/incidents/${id}`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    console.log('[API] Get incident response status:', response.status)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[API] Get incident failed:', errorText)
+      
+      if (response.status === 403) {
+        try {
+          const errorData = JSON.parse(errorText)
+          if (errorData.error === 'Token inválido') {
+            throw new Error('INVALID_TOKEN')
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message === 'INVALID_TOKEN') throw e
+        }
+        throw new Error('No autorizado para ver este incidente')
+      }
+      
+      throw new Error('Failed to fetch incident')
+    }
+    
+    const rawData = await response.text()
+    const data = JSON.parse(rawData) as { data: Incident }
+    return data.data
   }
-  
-  const data = await response.json() as ApiResponse<Incident>
-  console.log('[API] Get incident successful:', data.body)
-  return data.body
 }
 
 export async function updateIncidentStatus(token: string, id: string, estado: string) {
-  console.log('[API] Update incident status:', { id, estado, endpoint: `${API_BASE_URL}/staff/incidents/${id}/status` })
+  console.log('[API] Update incident status - WORKAROUND (CORS issue on backend):', { id, estado })
+  console.warn('[API] ⚠️ Backend endpoint has CORS issues - update may not persist')
   
-  const response = await fetch(`${API_BASE_URL}/staff/incidents/${id}/status`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ estado })
-  })
-  
-  console.log('[API] Update status response:', response.status)
-  
-  if (!response.ok) {
-    const error = await response.json()
-    console.error('[API] Update status failed:', error)
-    throw new Error('Failed to update incident status')
+  // WORKAROUND: Backend has CORS issues on PUT /staff/incidents/{id}/status
+  // We'll attempt the call but catch CORS errors gracefully
+  try {
+    const response = await fetch(`${API_BASE_URL}/staff/incidents/${id}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ estado })
+    })
+    
+    console.log('[API] Update status response:', response.status)
+    
+    if (!response.ok) {
+      const error = await response.json()
+      console.error('[API] Update status failed:', error)
+      throw new Error('Failed to update incident status')
+    }
+    
+    const data = await response.json() as ApiResponse<Incident>
+    console.log('[API] Update status successful:', data.body)
+    return data.body
+  } catch (error) {
+    // Check if it's a CORS error
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.warn('[API] ⚠️ CORS error on status update - returning optimistic result')
+      console.warn('[API] ⚠️ La actualización puede no haberse guardado en el servidor')
+      // Return a mock successful response for UI update
+      throw new Error('CORS_ERROR: El backend tiene problemas de CORS. La actualización puede no haberse guardado.')
+    }
+    throw error
   }
-  
-  const data = await response.json() as ApiResponse<Incident>
-  console.log('[API] Update status successful:', data.body)
-  return data.body
 }
 
-export async function addComment(token: string, id: string, content: string) {
-  console.log('[API] Add comment:', { id, content_length: content.length, endpoint: `${API_BASE_URL}/staff/incidents/${id}/comment` })
+export async function addComment(token: string, id: string, comentario: string) {
+  console.log('[API] Add comment - WORKAROUND (CORS issue on backend):', { id, comentario_length: comentario.length })
+  console.warn('[API] ⚠️ Backend endpoint has CORS issues - comment may not persist')
   
-  const response = await fetch(`${API_BASE_URL}/staff/incidents/${id}/comment`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ content })
-  })
-  
-  console.log('[API] Add comment response:', response.status)
-  
-  if (!response.ok) {
-    const error = await response.json()
-    console.error('[API] Add comment failed:', error)
-    throw new Error('Failed to add comment')
+  try {
+    const response = await fetch(`${API_BASE_URL}/staff/incidents/${id}/comment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ comentario })
+    })
+    
+    console.log('[API] Add comment response:', response.status)
+    
+    if (!response.ok) {
+      const error = await response.json()
+      console.error('[API] Add comment failed:', error)
+      throw new Error('Failed to add comment')
+    }
+    
+    const data = await response.json() as ApiResponse<any>
+    console.log('[API] Add comment successful:', data.body)
+    return data.body
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.warn('[API] ⚠️ CORS error on add comment - returning optimistic result')
+      throw new Error('CORS_ERROR: El backend tiene problemas de CORS. El comentario puede no haberse guardado.')
+    }
+    throw error
   }
-  
-  const data = await response.json() as ApiResponse<Comment>
-  console.log('[API] Add comment successful:', data.body)
-  return data.body
 }
 
 export async function assignIncident(token: string, id: string, department: string) {
-  console.log('[API] Assign incident:', { id, department, endpoint: `${API_BASE_URL}/staff/incidents/${id}/assign` })
+  console.log('[API] Assign incident - WORKAROUND (CORS issue on backend):', { id, department })
+  console.warn('[API] ⚠️ Backend endpoint has CORS issues - assignment may not persist')
   
-  const response = await fetch(`${API_BASE_URL}/staff/incidents/${id}/assign`, {
+  try {
+    const response = await fetch(`${API_BASE_URL}/staff/incidents/${id}/assign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ department })
+    })
+    
+    console.log('[API] Assign incident response:', response.status)
+    
+    if (!response.ok) {
+      const error = await response.json()
+      console.error('[API] Assign incident failed:', error)
+      throw new Error('Failed to assign incident')
+    }
+    
+    const data = await response.json() as ApiResponse<Incident>
+    console.log('[API] Assign incident successful:', data.body)
+    return data.body
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.warn('[API] ⚠️ CORS error on assign incident - returning optimistic result')
+      throw new Error('CORS_ERROR: El backend tiene problemas de CORS. La asignación puede no haberse guardado.')
+    }
+    throw error
+  }
+}
+
+export async function listIncidentsByDepartment(token: string, department: string) {
+  console.log('[API] List incidents by department (POST):', { department, endpoint: `${API_BASE_URL}/staff/incidents/by-department` })
+  
+  const response = await fetch(`${API_BASE_URL}/staff/incidents/by-department`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -250,31 +338,11 @@ export async function assignIncident(token: string, id: string, department: stri
     body: JSON.stringify({ department })
   })
   
-  console.log('[API] Assign incident response:', response.status)
-  
-  if (!response.ok) {
-    const error = await response.json()
-    console.error('[API] Assign incident failed:', error)
-    throw new Error('Failed to assign incident')
-  }
-  
-  const data = await response.json() as ApiResponse<Incident>
-  console.log('[API] Assign incident successful:', data.body)
-  return data.body
-}
-
-export async function listIncidentsByDepartment(token: string, department: string) {
-  console.log('[API] List incidents by department:', { department, endpoint: `${API_BASE_URL}/staff/incidents/by-department` })
-  
-  const response = await fetch(`${API_BASE_URL}/staff/incidents/by-department?department=${department}`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  })
-  
   console.log('[API] List by department response:', response.status)
   
   if (!response.ok) {
-    const error = await response.json()
-    console.error('[API] List by department failed:', error)
+    const errorText = await response.text()
+    console.error('[API] List by department failed:', errorText)
     throw new Error('Failed to fetch incidents')
   }
   

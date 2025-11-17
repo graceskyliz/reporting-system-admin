@@ -64,7 +64,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const [messages, setMessages] = useState<WebSocketMessage[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectAttemptsRef = useRef(0)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const connect = useCallback(() => {
     if (!token) {

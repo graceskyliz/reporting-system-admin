@@ -80,7 +80,7 @@ export default function HistoryPage() {
       case 'priority':
         return <Badge variant="secondary">Prioridad</Badge>
       case 'assignment':
-        return <Badge variant="accent">Asignación</Badge>
+        return <Badge variant="outline">Asignación</Badge>
       case 'creation':
         return <Badge variant="outline">Creación</Badge>
       case 'comment':

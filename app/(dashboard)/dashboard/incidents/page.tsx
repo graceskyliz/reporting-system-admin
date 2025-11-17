@@ -29,6 +29,7 @@ export default function IncidentsPage() {
     const fetchIncidents = async () => {
       try {
         setLoading(true)
+        setError('')
         console.log('[Incidents Page] Fetching incidents')
         const auth = getAuth()
         if (!auth) {
@@ -37,12 +38,8 @@ export default function IncidentsPage() {
           return
         }
 
-        const filters: any = {}
-        if (filterStatus !== 'all') filters.estado = filterStatus
-        if (filterPriority !== 'all') filters.urgencia = filterPriority
-
-        console.log('[Incidents Page] Filters:', filters)
-        const data = await listIncidents(auth.token, filters)
+        console.log('[Incidents Page] Fetching all incidents')
+        const data = await listIncidents(auth.token)
         console.log('[Incidents Page] Incidents received:', data)
         
         // Ensure data is an array
@@ -62,15 +59,23 @@ export default function IncidentsPage() {
     }
 
     fetchIncidents()
-  }, [filterStatus, filterPriority])
+  }, []) // Solo fetch una vez al montar
 
   const filteredIncidents = Array.isArray(incidents) ? incidents.filter((incident) => {
+    // Filtrado por búsqueda
     const matchesSearch =
       incident.tipo?.toLowerCase().includes(search.toLowerCase()) ||
       incident.incident_id?.toLowerCase().includes(search.toLowerCase()) ||
       incident.ubicacion?.toLowerCase().includes(search.toLowerCase()) ||
       incident.descripcion?.toLowerCase().includes(search.toLowerCase())
-    return matchesSearch
+    
+    // Filtrado por estado (frontend)
+    const matchesStatus = filterStatus === 'all' || incident.estado === filterStatus
+    
+    // Filtrado por urgencia (frontend)
+    const matchesPriority = filterPriority === 'all' || incident.urgencia === filterPriority
+    
+    return matchesSearch && matchesStatus && matchesPriority
   }) : []
 
   const getPriorityColor = (urgencia: string) => {
@@ -139,7 +144,7 @@ export default function IncidentsPage() {
               />
             </div>
 
-            {/* Status Filter */}
+            {/* Status Filter (Frontend) */}
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
@@ -151,7 +156,7 @@ export default function IncidentsPage() {
               <option value="resuelto">Resuelto</option>
             </select>
 
-            {/* Priority Filter */}
+            {/* Priority Filter (Frontend) */}
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
