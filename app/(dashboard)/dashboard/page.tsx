@@ -8,7 +8,6 @@ import { AlertCircle, CheckCircle, Clock, TrendingUp } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { IncidentsList } from '@/components/dashboard/incidents-list'
 import { IncidentChart } from '@/components/dashboard/incident-chart'
-import { RealtimeUpdates } from '@/components/dashboard/realtime-updates'
 import { getStaffStats } from '@/lib/api'
 import { getAuth } from '@/lib/auth-context'
 
@@ -180,9 +179,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Realtime Updates */}
-      <RealtimeUpdates />
 
       {/* Recent Incidents */}
       <IncidentsList />

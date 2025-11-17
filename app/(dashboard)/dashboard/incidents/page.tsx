@@ -10,6 +10,7 @@ import { Search, Filter, Plus, Loader2, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { listIncidents, Incident } from '@/lib/api'
 import { getAuth, clearAuth } from '@/lib/auth-context'
+import { formatUbicacion } from '@/lib/utils'
 
 export default function IncidentsPage() {
   const router = useRouter()
@@ -63,10 +64,11 @@ export default function IncidentsPage() {
 
   const filteredIncidents = Array.isArray(incidents) ? incidents.filter((incident) => {
     // Filtrado por búsqueda
+    const ubicacionStr = formatUbicacion(incident.ubicacion).toLowerCase()
     const matchesSearch =
       incident.tipo?.toLowerCase().includes(search.toLowerCase()) ||
       incident.incident_id?.toLowerCase().includes(search.toLowerCase()) ||
-      incident.ubicacion?.toLowerCase().includes(search.toLowerCase()) ||
+      ubicacionStr.includes(search.toLowerCase()) ||
       incident.descripcion?.toLowerCase().includes(search.toLowerCase())
     
     // Filtrado por estado (frontend)
@@ -222,7 +224,7 @@ export default function IncidentsPage() {
                     </div>
                     <div className="flex-1 min-w-40">
                       <h3 className="font-semibold text-foreground">{incident.tipo}</h3>
-                      <p className="text-sm text-muted-foreground">📍 {incident.ubicacion}</p>
+                      <p className="text-sm text-muted-foreground">📍 {formatUbicacion(incident.ubicacion)}</p>
                       <p className="text-xs text-muted-foreground mt-1">{incident.descripcion?.substring(0, 80)}...</p>
                     </div>
                     <Badge variant={getPriorityColor(incident.urgencia)} className="text-xs">

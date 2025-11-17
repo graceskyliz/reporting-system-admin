@@ -34,7 +34,7 @@ export interface Incident {
   reporter_id: string
   tipo: string
   descripcion: string
-  ubicacion: string
+  ubicacion: string | { edificio?: string; piso?: string }
   urgencia: 'baja' | 'media' | 'alta' | 'critica'
   estado: 'pendiente' | 'en_proceso' | 'resuelto'
   created_at: string
