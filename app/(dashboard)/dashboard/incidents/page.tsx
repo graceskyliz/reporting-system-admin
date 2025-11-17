@@ -87,7 +87,7 @@ export default function IncidentsPage() {
       case 'alta':
         return 'secondary'
       case 'media':
-        return 'accent'
+        return 'default'
       default:
         return 'outline'
     }

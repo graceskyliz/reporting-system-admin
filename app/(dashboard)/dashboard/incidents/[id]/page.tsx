@@ -289,7 +289,13 @@ export default function IncidentDetailPage() {
             </div>
             <div>
               <label className="text-sm font-semibold text-muted-foreground">Ubicación</label>
-              <p className="text-foreground mt-1">📍 {incident.ubicacion}</p>
+              <p className="text-foreground mt-1">
+                {typeof incident.ubicacion === 'string'
+                  ? `📍 ${incident.ubicacion}`
+                  : `📍 ${[incident.ubicacion.edificio, incident.ubicacion.piso ? `Piso ${incident.ubicacion.piso}` : null]
+                      .filter(Boolean)
+                      .join(', ')}`}
+              </p>
             </div>
             <div>
               <label className="text-sm font-semibold text-muted-foreground">Estado Actual</label>
